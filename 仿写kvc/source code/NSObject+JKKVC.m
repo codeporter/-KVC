@@ -10,32 +10,12 @@
 
 #import <objc/runtime.h>
 
-@interface _TrunkObject : NSObject
-
-@property (nonatomic, assign) Ivar *ivarList;
-@property (nonatomic, assign) unsigned int count;
-
-@end
-
-@implementation _TrunkObject
-
-- (void)dealloc {
-    if (_ivarList) {
-        free(_ivarList);
-        _ivarList = nil;
-    }
-}
-
-@end
 
 @interface NSObject ()
-
-@property (nonatomic, strong) _TrunkObject *trunk;
 
 @end
 
 @implementation NSObject (JKKVC)
-
 
 + (BOOL)jk_accessInstanceVariablesDirectly {
     return YES;
@@ -151,15 +131,6 @@
             [obj jk_setValue:value forKey:key];
         }
     }
-}
-#pragma mark - AssociatedObject
-- (_TrunkObject *)trunk {
-    _TrunkObject *obj = objc_getAssociatedObject(self, _cmd);
-    if (obj == nil) {
-        obj = [_TrunkObject new];
-        objc_setAssociatedObject(self, _cmd, obj, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    return obj;
 }
 
 #pragma mark - pravite method
@@ -285,28 +256,34 @@ id _getValFromVariable(NSObject *self, NSString *key) {
     //首字母大写
     NSString *upperFirsetCharKey = [NSString stringWithFormat:@"%@%@",[[key substringWithRange:NSMakeRange(0, 1)] uppercaseString], [key substringWithRange:NSMakeRange(1, key.length - 1)]];
     
-    unsigned int count = self.trunk.count;
-    Ivar *ivarList = self.trunk.ivarList;
-    if(ivarList ==  nil) {
-        ivarList = class_copyIvarList([self class], &count);
-        self.trunk.ivarList = ivarList;
-        self.trunk.count = count;
-    }
     
     NSString *_key = [NSString stringWithFormat:@"_%@", key];
     NSString *isKey = [NSString stringWithFormat:@"is%@", upperFirsetCharKey];
     NSString *_isKey = [NSString stringWithFormat:@"_%@", isKey];
     Ivar foundedIvar = nil;
     
-    for (int i = 0; i < count; i++) {
-        Ivar ivar = ivarList[i];
-        NSString *ivarName = @(ivar_getName(ivar));
+    
+    Class currentClass = [self class];
+    while (currentClass != [NSObject class]) {
+        unsigned int count = 0;
+        Ivar *ivarList = class_copyIvarList(currentClass, &count);
+        for (int i = 0; i < count; i++) {
+            Ivar ivar = ivarList[i];
+            NSString *ivarName = @(ivar_getName(ivar));
+            
+            if ([ivarName isEqualToString:_key] || [ivarName isEqualToString:_isKey]  || [ivarName isEqualToString:key] || [ivarName isEqualToString:isKey]) {
+                foundedIvar = ivar;
+                break;
+            }
+        }
+        free(ivarList);
         
-        if ([ivarName isEqualToString:_key] || [ivarName isEqualToString:_isKey]  || [ivarName isEqualToString:key] || [ivarName isEqualToString:isKey]) {
-            foundedIvar = ivar;
+        if (foundedIvar) {
             break;
         }
+        currentClass = class_getSuperclass(currentClass);
     }
+    
     
     if (foundedIvar) {
         uintptr_t offset = ivar_getOffset(foundedIvar);
@@ -574,27 +551,32 @@ BOOL _toggleSetterMethod(id self, NSString *methodName, NSString *key, id value)
 BOOL _setValForVariable(NSObject *self, NSString *key, id value) {
     NSString *upperFirsetCharKey = [NSString stringWithFormat:@"%@%@",[[key substringWithRange:NSMakeRange(0, 1)] uppercaseString], [key substringWithRange:NSMakeRange(1, key.length - 1)]];
     
-    unsigned int count = self.trunk.count;
-    Ivar *ivarList = self.trunk.ivarList;
-    if(ivarList ==  nil) {
-        ivarList = class_copyIvarList([self class], &count);
-        self.trunk.ivarList = ivarList;
-        self.trunk.count = count;
-    }
     
     NSString *_key = [NSString stringWithFormat:@"_%@", key];
     NSString *isKey = [NSString stringWithFormat:@"is%@", upperFirsetCharKey];
     NSString *_isKey = [NSString stringWithFormat:@"_%@", isKey];
     Ivar foundedIvar = nil;
     
-    for (int i = 0; i < count; i++) {
-        Ivar ivar = ivarList[i];
-        NSString *ivarName = @(ivar_getName(ivar));
+    
+    Class currentClass = [self class];
+    while (currentClass != [NSObject class]) {
+        unsigned int count = 0;
+        Ivar *ivarList = class_copyIvarList(currentClass, &count);
+        for (int i = 0; i < count; i++) {
+            Ivar ivar = ivarList[i];
+            NSString *ivarName = @(ivar_getName(ivar));
+            
+            if ([ivarName isEqualToString:_key] || [ivarName isEqualToString:_isKey]  || [ivarName isEqualToString:key] || [ivarName isEqualToString:isKey]) {
+                foundedIvar = ivar;
+                break;
+            }
+        }
+        free(ivarList);
         
-        if ([ivarName isEqualToString:_key] || [ivarName isEqualToString:_isKey]  || [ivarName isEqualToString:key] || [ivarName isEqualToString:isKey]) {
-            foundedIvar = ivar;
+        if (foundedIvar) {
             break;
         }
+        currentClass = class_getSuperclass(currentClass);
     }
     
     if (foundedIvar) {
